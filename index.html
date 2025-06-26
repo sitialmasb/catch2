@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Tangkap Objek</title>
+    <!-- Tailwind CSS for basic styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #e0e7ff; /* Light purple background */
+            margin: 0;
+            overflow: hidden; /* Prevent scrolling */
+        }
+
+        .game-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px; /* Max width for desktop */
+            height: 80vh; /* Responsive height */
+            max-height: 800px;
+            background-color: #ffffff;
+            border-radius: 1.5rem; /* Rounded corners */
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 4px solid #8b5cf6; /* Purple border */
+        }
+
+        canvas {
+            display: block;
+            background-color: #f3f4f6; /* Light gray background for canvas */
+            flex-grow: 1; /* Make canvas fill available space */
+            /* Removed inner rounded corners and margin from canvas itself */
+            /* Margin is now handled by the parent container's padding or game-info-targets positioning */
+            touch-action: none; /* Prevent default touch actions like scrolling/zooming */
+        }
+
+        .game-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 1rem;
+            z-index: 10; /* Ensure overlay is on top */
+            border-radius: 1.5rem;
+        }
+
+        .button {
+            padding: 0.75rem 2rem;
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: white;
+            background-color: #8b5cf6; /* Purple button */
+            border: none;
+            border-radius: 9999px; /* Fully rounded button */
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.5);
+            margin-top: 1.5rem;
+        }
+
+        .button:hover {
+            background-color: #6d28d9; /* Darker purple on hover */
+            transform: translateY(-2px);
+        }
+
+        .button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.5);
+        }
+
+        .game-info {
+            background-color: #a78bfa; /* Lighter purple info bar */
+            color: white;
+            padding: 0.75rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            font-size: 1.1rem;
+            border-top-left-radius: 1.25rem;
+            border-top-right-radius: 1.25rem;
+            z-index: 5; /* Below overlay, above canvas */
+        }
+
+        .game-info-targets {
+            background-color: #ede9fe; /* Very light purple */
+            color: #5b21b6; /* Dark purple text */
+            padding: 0.5rem 1rem;
+            display: flex;
+            flex-wrap: wrap; /* Allow wrapping for many items */
+            justify-content: center;
+            align-items: center;
+            gap: 1rem; /* Space between items */
+            border-bottom-left-radius: 1rem;
+            border-bottom-right-radius: 1rem;
+            font-size: 1rem;
+            font-weight: bold;
+            z-index: 5; /* Below overlay, above canvas */
+            /* Margin handled by container's flex/padding */
+        }
+
+        .target-item {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            transition: text-decoration 0.3s ease, opacity 0.3s ease;
+        }
+        .target-item.collected {
+            text-decoration: line-through;
+            opacity: 0.6;
+        }
+
+        .final-objects-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+            gap: 1rem;
+            margin-top: 2rem;
+            max-width: 400px;
+            width: 100%;
+            justify-items: center;
+        }
+
+        .final-object-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-size: 3rem; /* Emoji size */
+            margin-bottom: 0.5rem;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .game-container {
+                height: 95vh; /* Taller on mobile */
+                width: 95%; /* Wider on mobile */
+            }
+            .button {
+                font-size: 1.1rem;
+                padding: 0.6rem 1.5rem;
+            }
+            .game-info, .game-info-targets {
+                font-size: 0.9rem;
+                padding: 0.5rem 0.75rem;
+            }
+            .game-info-targets {
+                gap: 0.5rem;
+            }
+            .final-objects-grid {
+                grid-template-columns: repeat(auto-fit, minmax(50px, 1fr));
+                gap: 0.75rem;
+            }
+            .final-object-item {
+                font-size: 2.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <!-- Game Information Bar -->
+        <div class="game-info" id="gameInfo">
+            <span>Nyawa: <span id="livesDisplay">5</span></span>
+            <span>Putaran: <span id="roundDisplay">1</span></span>
+        </div>
+
+        <!-- Target Objects Display during gameplay -->
+        <div class="game-info-targets" id="gameInfoTargets">
+            <!-- Target items will be dynamically inserted here -->
+        </div>
+
+        <!-- Game Canvas -->
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- Game Overlays -->
+        <!-- Start Screen -->
+        <div id="startScreen" class="game-overlay">
+            <h1 class="text-4xl font-bold mb-4">Tangkap Objek!</h1>
+            <p class="text-lg">Tangkap objek yang benar, hindari yang salah!</p>
+            <p class="text-lg">Kamu punya 5 nyawa di setiap putaran.</p>
+            <button id="startButton" class="button">Mulai Game</button>
+        </div>
+
+        <!-- Round Intro Screen -->
+        <div id="roundIntroScreen" class="game-overlay hidden">
+            <h2 id="roundIntroTitle" class="text-3xl font-bold mb-4"></h2>
+            <p class="text-lg mb-2">Tangkap: <span id="targetObjectsList" class="font-bold"></span></p>
+            <p class="text-lg">Jangan sentuh objek lain!</p>
+            <button id="nextRoundButton" class="button">Lanjut</button>
+        </div>
+
+        <!-- Game Over / Game Complete Screen -->
+        <div id="endScreen" class="game-overlay hidden">
+            <h2 id="endMessage" class="text-3xl font-bold mb-4"></h2>
+            <p class="text-xl font-semibold mb-4">Objek yang Berhasil Ditangkap:</p>
+            <div class="final-objects-grid" id="finalObjectsGrid">
+                <!-- Collected objects will be inserted here -->
+            </div>
+            <button id="playAgainButton" class="button">Main Lagi?</button>
+        </div>
+    </div>
+
+    <script>
+        // Get canvas and its context
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Get UI elements
+        const startScreen = document.getElementById('startScreen');
+        const roundIntroScreen = document.getElementById('roundIntroScreen');
+        const endScreen = document.getElementById('endScreen');
+        const startButton = document.getElementById('startButton');
+        const nextRoundButton = document.getElementById('nextRoundButton');
+        const playAgainButton = document.getElementById('playAgainButton');
+        const livesDisplay = document.getElementById('livesDisplay');
+        const roundDisplay = document.getElementById('roundDisplay');
+        const roundIntroTitle = document.getElementById('roundIntroTitle');
+        const targetObjectsList = document.getElementById('targetObjectsList');
+        const endMessage = document.getElementById('endMessage');
+        const finalObjectsGrid = document.getElementById('finalObjectsGrid');
+        const gameInfoTargets = document.getElementById('gameInfoTargets'); // New element for in-game target list
+
+        // Game state variables
+        let gameState = 'start'; // 'start', 'roundIntro', 'playing', 'gameOver', 'gameComplete'
+        let currentRound = 1;
+        let lives = 5;
+        let player = {
+            x: canvas.width / 2,
+            y: canvas.height - 60,
+            width: 100,
+            height: 20,
+            speed: 8,
+            color: '#60a5fa' // Blue catcher
+        };
+        let fallingObjects = [];
+        let collectedObjectsRound1 = [];
+        let collectedObjectsRound2 = [];
+        let targetObjectsNeeded = 3;
+        let caughtTargetsThisRound = 0;
+
+        // Object properties
+        const objectSize = 40;
+        const objectSpeedMin = 1.5;
+        const objectSpeedMax = 3.5;
+        const spawnInterval = 1000; // milliseconds
+        let lastSpawnTime = 0;
+
+        // Game objects definitions for each round
+        const roundsData = {
+            1: {
+                themeName: "Hutan Ajaib",
+                target: [
+                    { emoji: '🍄', name: 'Jamur Berbintik', id: 'mush' },
+                    { emoji: '🌿', name: 'Daun Emas', id: 'leaf' },
+                    { emoji: '💎', name: 'Berlian Hutan', id: 'gem' }
+                ],
+                hazard: [
+                    { emoji: '🪨', name: 'Batu Tajam' },
+                    { emoji: '🌲', name: 'Duri Pohon' },
+                    { emoji: '💧', name: 'Lumpur Lengket' }
+                ]
+            },
+            2: {
+                themeName: "Luar Angkasa",
+                target: [
+                    { emoji: '⭐', name: 'Bintang Jatuh', id: 'star' },
+                    { emoji: '☄️', name: 'Komet Mini', id: 'comet' },
+                    { emoji: '🌑', name: 'Batuan Bulan', id: 'moonrock' }
+                ],
+                hazard: [
+                    { emoji: '💥', name: 'Asteroid Pecah' },
+                    { emoji: '⚫', name: 'Lubang Hitam Mini' },
+                    { emoji: '🛰️', name: 'Puing Satelit' }
+                ]
+            }
+        };
+
+        // --- Game Setup and Initialization ---
+
+        // Function to resize canvas
+        function resizeCanvas() {
+            // Set canvas size based on its container, considering info bars
+            const container = canvas.parentElement;
+            const gameInfoHeight = document.getElementById('gameInfo').offsetHeight;
+            const gameInfoTargetsHeight = document.getElementById('gameInfoTargets').offsetHeight;
+
+            canvas.width = container.clientWidth - 32; // Account for 1rem margin on each side (16px * 2)
+            canvas.height = container.clientHeight - 32 - gameInfoHeight - gameInfoTargetsHeight; // Subtract info bars and margins
+
+            // Update player position based on new canvas size
+            player.y = canvas.height - 60;
+            if (player.x + player.width > canvas.width) {
+                player.x = canvas.width - player.width;
+            }
+            if (player.x < 0) {
+                player.x = 0;
+            }
+
+            // Redraw everything if in playing state to avoid visual glitches
+            if (gameState === 'playing') {
+                draw();
+            }
+        }
+
+        // Initialize game on window load
+        window.onload = function() {
+            resizeCanvas(); // Set initial canvas size
+            showScreen('start'); // Show start screen
+            // Add event listeners after canvas is ready
+            setupEventListeners();
+            // Initial draw for start screen (canvas might be empty otherwise)
+            draw();
+        };
+
+        // Listen for window resize to make canvas responsive
+        window.addEventListener('resize', resizeCanvas);
+
+
+        // --- UI Screen Management ---
+
+        // Function to show/hide game screens
+        function showScreen(screen) {
+            startScreen.classList.add('hidden');
+            roundIntroScreen.classList.add('hidden');
+            endScreen.classList.add('hidden');
+            // Hide info bars when not playing
+            gameInfo.classList.add('hidden');
+            gameInfoTargets.classList.add('hidden');
+            canvas.classList.add('hidden'); // Hide canvas by default
+
+            switch (screen) {
+                case 'start':
+                    startScreen.classList.remove('hidden');
+                    break;
+                case 'roundIntro':
+                    roundIntroScreen.classList.remove('hidden');
+                    break;
+                case 'playing':
+                    canvas.classList.remove('hidden'); // Show canvas during gameplay
+                    gameInfo.classList.remove('hidden');
+                    gameInfoTargets.classList.remove('hidden');
+                    // Ensure the canvas is resized correctly after info bars become visible
+                    resizeCanvas();
+                    break;
+                case 'end':
+                    endScreen.classList.remove('hidden');
+                    break;
+            }
+            gameState = screen;
+            updateUI(); // Update lives/round display
+        }
+
+        // Function to update UI elements (lives, round)
+        function updateUI() {
+            livesDisplay.textContent = lives;
+            roundDisplay.textContent = currentRound;
+        }
+
+        // --- Event Listeners ---
+
+        function setupEventListeners() {
+            // Start button click
+            startButton.addEventListener('click', () => {
+                resetGame(); // Reset game state for the very first start
+                startGame();
+            });
+
+            // Next Round button click
+            nextRoundButton.addEventListener('click', () => {
+                startRound(); // Start the actual round
+            });
+
+            // Play Again button click
+            playAgainButton.addEventListener('click', () => {
+                resetGame();
+                showScreen('start');
+            });
+
+            // Player movement with keyboard
+            document.addEventListener('keydown', (e) => {
+                if (gameState === 'playing') {
+                    if (e.key === 'ArrowLeft') {
+                        player.x = Math.max(0, player.x - player.speed);
+                    } else if (e.key === 'ArrowRight') {
+                        player.x = Math.min(canvas.width - player.width, player.x + player.speed);
+                    }
+                }
+            });
+
+            // Player movement with mouse
+            canvas.addEventListener('mousemove', (e) => {
+                if (gameState === 'playing') {
+                    const rect = canvas.getBoundingClientRect();
+                    // Calculate mouse X position relative to the canvas
+                    let mouseX = e.clientX - rect.left;
+                    // Center the player under the mouse cursor
+                    player.x = mouseX - player.width / 2;
+                    // Keep player within canvas bounds
+                    player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+                }
+            });
+
+            // Player movement with touch (swipe left/right on canvas)
+            let touchStartX = 0;
+            canvas.addEventListener('touchstart', (e) => {
+                if (gameState === 'playing') {
+                    e.preventDefault(); // Prevent scrolling/zooming
+                    touchStartX = e.touches[0].clientX;
+                }
+            });
+
+            canvas.addEventListener('touchmove', (e) => {
+                if (gameState === 'playing') {
+                    e.preventDefault(); // Prevent scrolling/zooming
+                    const touchCurrentX = e.touches[0].clientX;
+                    const deltaX = touchCurrentX - touchStartX;
+
+                    // Move player based on touch movement
+                    player.x += deltaX; // Use full delta for more direct control
+                    player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+                    touchStartX = touchCurrentX; // Update start for next move event
+                }
+            });
+        }
+
+
+        // --- Game Logic Functions ---
+
+        // Resets all game data to initial state
+        function resetGame() {
+            currentRound = 1;
+            lives = 5; // Reset lives for new game
+            collectedObjectsRound1 = [];
+            collectedObjectsRound2 = [];
+            fallingObjects = [];
+            caughtTargetsThisRound = 0;
+            player.x = canvas.width / 2 - player.width / 2; // Reset player position
+            updateUI();
+        }
+
+        // Starts the game (moves to round intro)
+        function startGame() {
+            showScreen('roundIntro');
+            setupRoundIntro(currentRound);
+        }
+
+        // Sets up the round intro screen and in-game target list
+        function setupRoundIntro(roundNum) {
+            const roundData = roundsData[roundNum];
+            roundIntroTitle.textContent = `Putaran ${roundNum}: ${roundData.themeName}`;
+            targetObjectsList.innerHTML = roundData.target.map(obj => `${obj.emoji} ${obj.name}`).join(', ');
+            lives = 5; // Reset lives at the start of each round
+            caughtTargetsThisRound = 0; // Reset caught targets for the new round
+            fallingObjects = []; // Clear any residual objects
+
+            // Populate the in-game target list
+            gameInfoTargets.innerHTML = '';
+            roundData.target.forEach(obj => {
+                const span = document.createElement('span');
+                span.id = `target-${obj.id}`; // Unique ID for each target item
+                span.classList.add('target-item');
+                span.innerHTML = `${obj.emoji} ${obj.name}`;
+                gameInfoTargets.appendChild(span);
+            });
+
+            updateUI();
+        }
+
+        // Starts the actual game round
+        function startRound() {
+            showScreen('playing');
+            gameLoop(); // Start the game animation loop
+        }
+
+        // Spawns a new falling object
+        function spawnObject() {
+            const roundData = roundsData[currentRound];
+            const collectedThisRound = currentRound === 1 ? collectedObjectsRound1 : collectedObjectsRound2;
+            const availableTargets = roundData.target.filter(target => {
+                return !collectedThisRound.some(collected => collected.emoji === target.emoji);
+            });
+
+            let objectData;
+            let isSpawnedTarget = false; // Flag for the spawned object
+
+            // Decide whether to spawn a target or a hazard
+            // Prioritize spawning needed targets if not all caught yet
+            if (availableTargets.length > 0 && Math.random() < 0.6) { // 60% chance to spawn a target if available
+                objectData = availableTargets[Math.floor(Math.random() * availableTargets.length)];
+                isSpawnedTarget = true;
+            } else {
+                // Spawn a hazard
+                objectData = roundData.hazard[Math.floor(Math.random() * roundData.hazard.length)];
+                isSpawnedTarget = false;
+            }
+
+            const x = Math.random() * (canvas.width - objectSize);
+            const y = -objectSize;
+            const speed = objectSpeedMin + Math.random() * (objectSpeedMax - objectSpeedMin);
+
+            fallingObjects.push({
+                x: x,
+                y: y,
+                width: objectSize,
+                height: objectSize,
+                speed: speed,
+                emoji: objectData.emoji,
+                name: objectData.name,
+                id: objectData.id, // Include ID for target tracking
+                isTarget: isSpawnedTarget // This is the crucial flag for collection logic
+            });
+        }
+
+
+        // Updates game logic (object movement, collisions, etc.)
+        function update() {
+            const currentTime = Date.now();
+            // Spawn new object periodically
+            if (currentTime - lastSpawnTime > spawnInterval) {
+                spawnObject();
+                lastSpawnTime = currentTime;
+            }
+
+            for (let i = fallingObjects.length - 1; i >= 0; i--) {
+                const obj = fallingObjects[i];
+                obj.y += obj.speed;
+
+                // Collision detection with player
+                if (
+                    obj.y + obj.height > player.y &&
+                    obj.y < player.y + player.height &&
+                    obj.x + obj.width > player.x &&
+                    obj.x < player.x + player.width
+                ) {
+                    if (obj.isTarget) {
+                        // Caught a target object
+                        const collectedList = currentRound === 1 ? collectedObjectsRound1 : collectedObjectsRound2;
+                        // Add only if not already collected in this specific round
+                        if (!collectedList.some(item => item.emoji === obj.emoji)) {
+                            collectedList.push({ emoji: obj.emoji, name: obj.name });
+                            caughtTargetsThisRound++;
+                            // Mark as collected in the in-game display
+                            const targetItemElement = document.getElementById(`target-${obj.id}`);
+                            if (targetItemElement) {
+                                targetItemElement.classList.add('collected');
+                            }
+                        }
+                    } else {
+                        // Caught a hazard object, lose a life
+                        lives--;
+                    }
+                    fallingObjects.splice(i, 1); // Remove object after collision
+                } else if (obj.y > canvas.height) {
+                    // Object went off-screen
+                    if (obj.isTarget) {
+                        // Missed a target object, lose a life
+                        lives--;
+                    }
+                    fallingObjects.splice(i, 1); // Remove object
+                }
+            }
+
+            updateUI(); // Update UI after game logic
+
+            // Check round completion or game over
+            if (lives <= 0) {
+                endGame('gameOver');
+            } else if (caughtTargetsThisRound >= targetObjectsNeeded) {
+                endGame('roundComplete');
+            }
+        }
+
+        // Draws all game elements on the canvas
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
+
+            // Draw player
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+            ctx.strokeStyle = '#4c0519'; // Darker border for player
+            ctx.lineWidth = 2;
+            ctx.strokeRect(player.x, player.y, player.width, player.height);
+
+
+            // Draw falling objects (using emoji)
+            ctx.font = `${objectSize}px Arial`; // Set font size for emoji
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            fallingObjects.forEach(obj => {
+                ctx.fillText(obj.emoji, obj.x + obj.width / 2, obj.y + obj.height / 2);
+            });
+        }
+
+        // Main game animation loop
+        let animationFrameId;
+        function gameLoop() {
+            if (gameState === 'playing') {
+                update();
+                draw();
+                animationFrameId = requestAnimationFrame(gameLoop); // Continue loop
+            }
+        }
+
+        // Ends the current game phase (round complete or game over)
+        function endGame(reason) {
+            cancelAnimationFrame(animationFrameId); // Stop the game loop
+
+            if (reason === 'gameOver') {
+                endMessage.textContent = "Ups, nyawamu habis!";
+                showScreen('end');
+                displayFinalObjects();
+            } else if (reason === 'roundComplete') {
+                if (currentRound === 1) {
+                    currentRound = 2; // Move to next round
+                    showScreen('roundIntro');
+                    setupRoundIntro(currentRound); // Prepare for round 2
+                } else {
+                    // Game completed
+                    endMessage.textContent = "Selamat! Kamu berhasil menyelesaikan game!";
+                    showScreen('end');
+                    displayFinalObjects();
+                }
+            }
+        }
+
+        // Displays collected objects on the end screen
+        function displayFinalObjects() {
+            finalObjectsGrid.innerHTML = ''; // Clear previous objects
+
+            const allCollected = [...collectedObjectsRound1, ...collectedObjectsRound2];
+
+            if (allCollected.length === 0) {
+                const noObjectsMessage = document.createElement('p');
+                noObjectsMessage.textContent = "Tidak ada objek yang berhasil ditangkap.";
+                noObjectsMessage.classList.add('text-lg', 'text-gray-300');
+                finalObjectsGrid.appendChild(noObjectsMessage);
+            } else {
+                allCollected.forEach(obj => {
+                    const div = document.createElement('div');
+                    div.classList.add('final-object-item');
+                    div.innerHTML = `${obj.emoji}`; // Display emoji directly
+                    const nameSpan = document.createElement('span');
+                    nameSpan.textContent = obj.name;
+                    nameSpan.classList.add('text-sm', 'text-gray-300'); // Smaller text for name
+                    div.appendChild(nameSpan);
+                    finalObjectsGrid.appendChild(div);
+                });
+            }
+        }
+    </script>
+</body>
+</html>
