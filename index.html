@@ -7,15 +7,16 @@
     <!-- Tailwind CSS for basic styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        /* Import the "Press Start 2P" font from Google Fonts */
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: 'Press Start 2P', cursive;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            background-color: #e0e7ff; /* Light purple background */
+            background-color: hsl(196, 81%, 71%); /* Light blue background */
             margin: 0;
             overflow: hidden; /* Prevent scrolling */
         }
@@ -32,15 +33,13 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            border: 4px solid #8b5cf6; /* Purple border */
+            border: 4px solid #f4f747; /* Yellow border */
         }
 
         canvas {
             display: block;
             background-color: #f3f4f6; /* Light gray background for canvas */
             flex-grow: 1; /* Make canvas fill available space */
-            /* Removed inner rounded corners and margin from canvas itself */
-            /* Margin is now handled by the parent container's padding or game-info-targets positioning */
             touch-action: none; /* Prevent default touch actions like scrolling/zooming */
         }
 
@@ -67,17 +66,17 @@
             font-size: 1.25rem;
             font-weight: bold;
             color: white;
-            background-color: #8b5cf6; /* Purple button */
+            background-color: #5cf683; /* Purple button */
             border: none;
             border-radius: 9999px; /* Fully rounded button */
             cursor: pointer;
             transition: background-color 0.3s ease, transform 0.2s ease;
-            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.5);
+            
             margin-top: 1.5rem;
         }
 
         .button:hover {
-            background-color: #6d28d9; /* Darker purple on hover */
+            background-color: #32693d; /* Darker green on hover */
             transform: translateY(-2px);
         }
 
@@ -114,7 +113,9 @@
             font-size: 1rem;
             font-weight: bold;
             z-index: 5; /* Below overlay, above canvas */
-            /* Margin handled by container's flex/padding */
+        }
+        .game-info-targets img {
+            border-radius: 0.25rem; /* Small radius for images in info bar */
         }
 
         .target-item {
@@ -142,8 +143,13 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            font-size: 3rem; /* Emoji size */
             margin-bottom: 0.5rem;
+        }
+        .final-object-item img {
+            width: 3rem; /* Same as objectSize for final display */
+            height: 3rem;
+            border-radius: 0.5rem; /* Rounded corners for final images */
+            object-fit: contain; /* Ensure image fits */
         }
 
         /* Responsive adjustments */
@@ -163,18 +169,30 @@
             .game-info-targets {
                 gap: 0.5rem;
             }
+            .game-info-targets img {
+                height: 1.25rem; /* Smaller images on mobile for info bar */
+                width: 1.25rem;
+            }
             .final-objects-grid {
                 grid-template-columns: repeat(auto-fit, minmax(50px, 1fr));
                 gap: 0.75rem;
             }
-            .final-object-item {
-                font-size: 2.5rem;
+            .final-object-item img {
+                width: 2.5rem;
+                height: 2.5rem;
             }
         }
     </style>
 </head>
 <body>
     <div class="game-container">
+        <!-- Loading Screen -->
+        <div id="loadingScreen" class="game-overlay">
+            <h2 class="text-3xl font-bold mb-4">Loading...</h2>
+            <p class="text-lg">Mohon tunggu sebentar.</p>
+            <div class="animate-spin rounded-full h-12 w-12 border-b-4 border-white mt-4"></div>
+        </div>
+
         <!-- Game Information Bar -->
         <div class="game-info" id="gameInfo">
             <span>Nyawa: <span id="livesDisplay">5</span></span>
@@ -182,7 +200,7 @@
         </div>
 
         <!-- Target Objects Display during gameplay -->
-        <div class="game-info-targets" id="gameInfoTargets">
+        <div class="game-info-targets hidden" id="gameInfoTargets">
             <!-- Target items will be dynamically inserted here -->
         </div>
 
@@ -191,10 +209,10 @@
 
         <!-- Game Overlays -->
         <!-- Start Screen -->
-        <div id="startScreen" class="game-overlay">
-            <h1 class="text-4xl font-bold mb-4">Tangkap Objek!</h1>
-            <p class="text-lg">Tangkap objek yang benar, hindari yang salah!</p>
-            <p class="text-lg">Kamu punya 5 nyawa di setiap putaran.</p>
+        <div id="startScreen" class="game-overlay hidden">
+            <h1 class="text-4xl font-bold mb-4">Don't know what to do now?</h1>
+            <p class="text-lg">Biar aku bantuin!</p>
+            <p class="text-lg">Gunakan **mouse** di PC atau **jari** Anda di HP.</p>
             <button id="startButton" class="button">Mulai Game</button>
         </div>
 
@@ -223,6 +241,7 @@
         const ctx = canvas.getContext('2d');
 
         // Get UI elements
+        const loadingScreen = document.getElementById('loadingScreen');
         const startScreen = document.getElementById('startScreen');
         const roundIntroScreen = document.getElementById('roundIntroScreen');
         const endScreen = document.getElementById('endScreen');
@@ -238,7 +257,7 @@
         const gameInfoTargets = document.getElementById('gameInfoTargets'); // New element for in-game target list
 
         // Game state variables
-        let gameState = 'start'; // 'start', 'roundIntro', 'playing', 'gameOver', 'gameComplete'
+        let gameState = 'loading'; // Initial state is loading
         let currentRound = 1;
         let lives = 5;
         let player = {
@@ -250,10 +269,9 @@
             color: '#60a5fa' // Blue catcher
         };
         let fallingObjects = [];
-        let collectedObjectsRound1 = [];
-        let collectedObjectsRound2 = [];
-        let targetObjectsNeeded = 3;
-        let caughtTargetsThisRound = 0;
+        let collectedObjectsRound1 = []; // Stores unique collected targets for round 1
+        let collectedObjectsRound2 = []; // Stores unique collected targets for round 2
+        let caughtTargetsThisRound = 0; // Number of *unique* targets caught this round
 
         // Object properties
         const objectSize = 40;
@@ -262,37 +280,90 @@
         const spawnInterval = 1000; // milliseconds
         let lastSpawnTime = 0;
 
+        // Stores preloaded Image objects keyed by imageUrl
+        let loadedImages = {};
+        // Placeholder image for errors
+        const errorImageUrl = `https://placehold.co/${objectSize}x${objectSize}/808080/ffffff?text=ERR`;
+
         // Game objects definitions for each round
+        // REPLACE THESE URLS WITH YOUR OWN PUBLIC IMAGE URLS!
         const roundsData = {
             1: {
-                themeName: "Hutan Ajaib",
-                target: [
-                    { emoji: '🍄', name: 'Jamur Berbintik', id: 'mush' },
-                    { emoji: '🌿', name: 'Daun Emas', id: 'leaf' },
-                    { emoji: '💎', name: 'Berlian Hutan', id: 'gem' }
+                themeName: "Cemilan",
+                targetObjectsNeeded: 2, // Round 1 needs 2 targets
+                potentialTargets: [ // Larger pool of targets
+                    { name: 'Kuaci', id: 'r1-mush', imageUrl: 'https://imgur.com/hF8tBJg.png' },
+                    { name: 'Es Teh', id: 'r1-leaf', imageUrl: 'https://imgur.com/d9XtVwF.png' },
+                    { name: 'Indomie Goreng', id: 'r1-gem', imageUrl: 'https://imgur.com/gdZMXe5.png' },
+                    { name: 'Kopi', id: 'r1-flower', imageUrl: 'https://imgur.com/CyrJfkT.png' },
+                    { name: 'Gorengan', id: 'r1-crystal', imageUrl: 'https://imgur.com/H4K7YwC.png' }
                 ],
                 hazard: [
-                    { emoji: '🪨', name: 'Batu Tajam' },
-                    { emoji: '🌲', name: 'Duri Pohon' },
-                    { emoji: '💧', name: 'Lumpur Lengket' }
-                ]
+                    { name: 'Matcha', imageUrl: 'https://imgur.com/Uxh1z7H.png' },
+                    { name: 'Tiramissu Cake', imageUrl: 'https://imgur.com/4HpiWWU.png' },
+                    { name: 'Burger', imageUrl: 'https://imgur.com/KjiLmjR.png' },
+                    { name: 'Salad', imageUrl: 'https://imgur.com/d9YUw4Q.png' },
+                    { name: 'Yogurt', imageUrl: 'https://imgur.com/Undx2BP.png' }
+                ],
+                activeTargets: [] // Will be filled dynamically at round start
             },
             2: {
-                themeName: "Luar Angkasa",
-                target: [
-                    { emoji: '⭐', name: 'Bintang Jatuh', id: 'star' },
-                    { emoji: '☄️', name: 'Komet Mini', id: 'comet' },
-                    { emoji: '🌑', name: 'Batuan Bulan', id: 'moonrock' }
+                themeName: "Aktivitas",
+                targetObjectsNeeded: 1, // Round 2 needs only 1 target
+                potentialTargets: [
+                    { name: 'Main Catur', id: 'r2-star', imageUrl: 'https://imgur.com/CVdstLy.png' },
+                    { name: 'Ngobrol', id: 'r2-comet', imageUrl: 'https://imgur.com/rHP2rxk.png' },
+                    { name: 'Main kartu', id: 'r2-moonrock', imageUrl: 'https://imgur.com/RVEp4ws.png' },
+                    { name: 'Belajar', id: 'r2-mini-sat', imageUrl: 'https://imgur.com/dloiQMP.png' },
+                    { name: 'Curhat', id: 'r2-alien', imageUrl: 'https://imgur.com/cfapTKD.png' }
                 ],
                 hazard: [
-                    { emoji: '💥', name: 'Asteroid Pecah' },
-                    { emoji: '⚫', name: 'Lubang Hitam Mini' },
-                    { emoji: '🛰️', name: 'Puing Satelit' }
-                ]
+                    { name: 'Velocity', imageUrl: 'https://imgur.com/Sf75RwZ.png' },
+                    { name: 'Tidur', imageUrl: 'https://imgur.com/OyyU9br.png' }
+                    
+                ],
+                activeTargets: [] // Will be filled dynamically at round start
             }
         };
 
         // --- Game Setup and Initialization ---
+
+        // Function to preload all images
+        async function preloadImages() {
+            const allImageUrls = new Set();
+            for (const round of Object.values(roundsData)) {
+                round.potentialTargets.forEach(obj => allImageUrls.add(obj.imageUrl));
+                round.hazard.forEach(obj => allImageUrls.add(obj.imageUrl));
+            }
+
+            const imagePromises = Array.from(allImageUrls).map(url => {
+                return new Promise(resolve => { // Always resolve to prevent Promise.all from failing on single image error
+                    const img = new Image();
+                    img.src = url;
+                    img.onload = () => {
+                        loadedImages[url] = img;
+                        resolve();
+                    };
+                    img.onerror = () => {
+                        console.error(`Failed to load image: ${url}. Using fallback.`);
+                        const fallbackImg = new Image();
+                        fallbackImg.src = errorImageUrl;
+                        fallbackImg.onload = () => {
+                            loadedImages[url] = fallbackImg;
+                            resolve();
+                        };
+                        fallbackImg.onerror = () => {
+                            console.error(`Failed to load fallback image for ${url}.`);
+                            loadedImages[url] = null; // Mark as completely failed
+                            resolve(); // Resolve to allow game to continue
+                        }
+                    };
+                });
+            });
+
+            await Promise.all(imagePromises);
+            console.log('All images preloaded.');
+        }
 
         // Function to resize canvas
         function resizeCanvas() {
@@ -320,13 +391,13 @@
         }
 
         // Initialize game on window load
-        window.onload = function() {
-            resizeCanvas(); // Set initial canvas size
-            showScreen('start'); // Show start screen
-            // Add event listeners after canvas is ready
-            setupEventListeners();
-            // Initial draw for start screen (canvas might be empty otherwise)
-            draw();
+        window.onload = async function() {
+            showScreen('loading'); // Show loading screen first
+            await preloadImages(); // Preload all images
+            resizeCanvas(); // Set initial canvas size after images might affect layout
+            showScreen('start'); // Then show start screen
+            setupEventListeners(); // Add event listeners
+            draw(); // Initial draw for start screen (canvas might be empty otherwise)
         };
 
         // Listen for window resize to make canvas responsive
@@ -337,6 +408,7 @@
 
         // Function to show/hide game screens
         function showScreen(screen) {
+            loadingScreen.classList.add('hidden'); // Always hide loading screen when showing others
             startScreen.classList.add('hidden');
             roundIntroScreen.classList.add('hidden');
             endScreen.classList.add('hidden');
@@ -346,6 +418,9 @@
             canvas.classList.add('hidden'); // Hide canvas by default
 
             switch (screen) {
+                case 'loading':
+                    loadingScreen.classList.remove('hidden');
+                    break;
                 case 'start':
                     startScreen.classList.remove('hidden');
                     break;
@@ -464,19 +539,33 @@
         // Sets up the round intro screen and in-game target list
         function setupRoundIntro(roundNum) {
             const roundData = roundsData[roundNum];
-            roundIntroTitle.textContent = `Putaran ${roundNum}: ${roundData.themeName}`;
-            targetObjectsList.innerHTML = roundData.target.map(obj => `${obj.emoji} ${obj.name}`).join(', ');
+            roundIntroTitle.textContent = `Step ${roundNum}: ${roundData.themeName}`;
             lives = 5; // Reset lives at the start of each round
             caughtTargetsThisRound = 0; // Reset caught targets for the new round
             fallingObjects = []; // Clear any residual objects
 
+            // Dynamically select 3 unique targets for this round from the potential pool
+            roundData.activeTargets = [];
+            const pool = [...roundData.potentialTargets]; // Copy array to pick from
+            for (let i = 0; i < roundData.targetObjectsNeeded; i++) { // Use roundData.targetObjectsNeeded here
+                if (pool.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * pool.length);
+                    roundData.activeTargets.push(pool.splice(randomIndex, 1)[0]); // Add and remove from pool
+                }
+            }
+
+            // Update intro screen text with selected targets
+            targetObjectsList.innerHTML = roundData.activeTargets.map(obj => 
+                `<img src="${obj.imageUrl}" alt="${obj.name}" class="inline-block h-8 w-8 align-middle rounded-md"> ${obj.name}`
+            ).join(', ');
+
             // Populate the in-game target list
             gameInfoTargets.innerHTML = '';
-            roundData.target.forEach(obj => {
+            roundData.activeTargets.forEach(obj => { // Use activeTargets here
                 const span = document.createElement('span');
-                span.id = `target-${obj.id}`; // Unique ID for each target item
+                span.id = `target-${roundNum}-${obj.id}`; // Unique ID for each target item (per round)
                 span.classList.add('target-item');
-                span.innerHTML = `${obj.emoji} ${obj.name}`;
+                span.innerHTML = `<img src="${obj.imageUrl}" alt="${obj.name}" class="inline-block h-6 w-6 align-middle rounded-md"> ${obj.name}`;
                 gameInfoTargets.appendChild(span);
             });
 
@@ -492,25 +581,38 @@
         // Spawns a new falling object
         function spawnObject() {
             const roundData = roundsData[currentRound];
-            const collectedThisRound = currentRound === 1 ? collectedObjectsRound1 : collectedObjectsRound2;
-            const availableTargets = roundData.target.filter(target => {
-                return !collectedThisRound.some(collected => collected.emoji === target.emoji);
-            });
+            const collectedList = currentRound === 1 ? collectedObjectsRound1 : collectedObjectsRound2;
+            const currentRoundActiveTargets = roundData.activeTargets; // Get the specific targets for this round
 
             let objectData;
-            let isSpawnedTarget = false; // Flag for the spawned object
+            let isThisInstanceATargetToCollect = false; // Flag to indicate if this specific falling object instance is a *new* target to collect
 
-            // Decide whether to spawn a target or a hazard
-            // Prioritize spawning needed targets if not all caught yet
-            if (availableTargets.length > 0 && Math.random() < 0.6) { // 60% chance to spawn a target if available
-                objectData = availableTargets[Math.floor(Math.random() * availableTargets.length)];
-                isSpawnedTarget = true;
+            const availableTargetsToCollect = currentRoundActiveTargets.filter(target => {
+                return !collectedList.some(collected => collected.id === target.id);
+            });
+
+            // Prioritize spawning a NEW target if available and randomly chosen
+            if (availableTargetsToCollect.length > 0 && Math.random() < 0.6) { // 60% chance for a new target
+                objectData = availableTargetsToCollect[Math.floor(Math.random() * availableTargetsToCollect.length)];
+                isThisInstanceATargetToCollect = true; // This is a new target!
             } else {
-                // Spawn a hazard
-                objectData = roundData.hazard[Math.floor(Math.random() * roundData.hazard.length)];
-                isSpawnedTarget = false;
-            }
+                // Otherwise, spawn a hazard OR an already collected target
+                const hazards = roundData.hazard;
+                const alreadyCollectedTargets = currentRoundActiveTargets.filter(target =>
+                    collectedList.some(item => item.id === target.id)
+                );
+                
+                const possibleFallingObjects = [...hazards, ...alreadyCollectedTargets];
 
+                if (possibleFallingObjects.length > 0) {
+                    objectData = possibleFallingObjects[Math.floor(Math.random() * possibleFallingObjects.length)];
+                } else {
+                    // Fallback: If somehow nothing is left (very unlikely), just pick a random hazard
+                    objectData = hazards[Math.floor(Math.random() * hazards.length)];
+                }
+                isThisInstanceATargetToCollect = false; // This object is NOT a new target for collection
+            }
+            
             const x = Math.random() * (canvas.width - objectSize);
             const y = -objectSize;
             const speed = objectSpeedMin + Math.random() * (objectSpeedMax - objectSpeedMin);
@@ -521,10 +623,11 @@
                 width: objectSize,
                 height: objectSize,
                 speed: speed,
-                emoji: objectData.emoji,
                 name: objectData.name,
-                id: objectData.id, // Include ID for target tracking
-                isTarget: isSpawnedTarget // This is the crucial flag for collection logic
+                id: objectData.id, // Include ID for consistent tracking
+                imageUrl: objectData.imageUrl || errorImageUrl, // Use actual image URL or fallback
+                image: loadedImages[objectData.imageUrl || errorImageUrl], // Get the preloaded Image object
+                isTarget: isThisInstanceATargetToCollect // True if it's a NEW unique target to be collected
             });
         }
 
@@ -542,6 +645,10 @@
                 const obj = fallingObjects[i];
                 obj.y += obj.speed;
 
+                const collectedList = currentRound === 1 ? collectedObjectsRound1 : collectedObjectsRound2;
+                const isAlreadyCollectedThisRound = collectedList.some(item => item.id === obj.id);
+
+
                 // Collision detection with player
                 if (
                     obj.y + obj.height > player.y &&
@@ -549,30 +656,27 @@
                     obj.x + obj.width > player.x &&
                     obj.x < player.x + player.width
                 ) {
-                    if (obj.isTarget) {
-                        // Caught a target object
-                        const collectedList = currentRound === 1 ? collectedObjectsRound1 : collectedObjectsRound2;
-                        // Add only if not already collected in this specific round
-                        if (!collectedList.some(item => item.emoji === obj.emoji)) {
-                            collectedList.push({ emoji: obj.emoji, name: obj.name });
-                            caughtTargetsThisRound++;
-                            // Mark as collected in the in-game display
-                            const targetItemElement = document.getElementById(`target-${obj.id}`);
-                            if (targetItemElement) {
-                                targetItemElement.classList.add('collected');
-                            }
+                    // If it's a target object AND it's not yet collected in this round
+                    if (obj.isTarget && !isAlreadyCollectedThisRound) {
+                        collectedList.push({ name: obj.name, id: obj.id, imageUrl: obj.imageUrl });
+                        caughtTargetsThisRound++;
+                        // Mark as collected in the in-game display
+                        const targetItemElement = document.getElementById(`target-${currentRound}-${obj.id}`);
+                        if (targetItemElement) {
+                            targetItemElement.classList.add('collected');
                         }
-                    } else {
-                        // Caught a hazard object, lose a life
+                    } else if (!obj.isTarget && !isAlreadyCollectedThisRound) { // It's a hazard (not a target) AND not an already collected target
                         lives--;
                     }
+                    // If it's a target but already collected (isAlreadyCollectedThisRound=true), do nothing (no life loss/gain)
                     fallingObjects.splice(i, 1); // Remove object after collision
                 } else if (obj.y > canvas.height) {
                     // Object went off-screen
-                    if (obj.isTarget) {
-                        // Missed a target object, lose a life
+                    // Only penalize if it was a NEW target AND it was missed
+                    if (obj.isTarget && !isAlreadyCollectedThisRound) {
                         lives--;
                     }
+                    // If it's a hazard or an already-collected target that went off-screen, no life penalty.
                     fallingObjects.splice(i, 1); // Remove object
                 }
             }
@@ -582,7 +686,7 @@
             // Check round completion or game over
             if (lives <= 0) {
                 endGame('gameOver');
-            } else if (caughtTargetsThisRound >= targetObjectsNeeded) {
+            } else if (caughtTargetsThisRound >= roundsData[currentRound].targetObjectsNeeded) { // Check against dynamic targetObjectsNeeded
                 endGame('roundComplete');
             }
         }
@@ -599,12 +703,19 @@
             ctx.strokeRect(player.x, player.y, player.width, player.height);
 
 
-            // Draw falling objects (using emoji)
-            ctx.font = `${objectSize}px Arial`; // Set font size for emoji
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
+            // Draw falling objects (using images)
             fallingObjects.forEach(obj => {
-                ctx.fillText(obj.emoji, obj.x + obj.width / 2, obj.y + obj.height / 2);
+                if (obj.image) {
+                    ctx.drawImage(obj.image, obj.x, obj.y, obj.width, obj.height);
+                } else {
+                    // Fallback text if image failed to load, using the game font
+                    ctx.font = `${objectSize * 0.5}px "Press Start 2P", Arial`; // Smaller text for fallback
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillStyle = 'red'; // Red text for error
+                    ctx.fillText('?', obj.x + obj.width / 2, obj.y + obj.height / 2);
+                    ctx.fillStyle = 'black'; // Reset fill style
+                }
             });
         }
 
@@ -633,7 +744,7 @@
                     setupRoundIntro(currentRound); // Prepare for round 2
                 } else {
                     // Game completed
-                    endMessage.textContent = "Selamat! Kamu berhasil menyelesaikan game!";
+                    endMessage.textContent = "You did it! Lakukan ini!";
                     showScreen('end');
                     displayFinalObjects();
                 }
@@ -655,7 +766,8 @@
                 allCollected.forEach(obj => {
                     const div = document.createElement('div');
                     div.classList.add('final-object-item');
-                    div.innerHTML = `${obj.emoji}`; // Display emoji directly
+                    // Use an <img> tag for the final display
+                    div.innerHTML = `<img src="${obj.imageUrl}" alt="${obj.name}" class="h-12 w-12 rounded-lg object-contain">`;
                     const nameSpan = document.createElement('span');
                     nameSpan.textContent = obj.name;
                     nameSpan.classList.add('text-sm', 'text-gray-300'); // Smaller text for name
